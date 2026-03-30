@@ -14,37 +14,39 @@ const initialForm = {
   call_to_action: "",
 };
 
-const sections = [
+const steps = [
   {
+    id: 1,
     title: "Sender Details",
-    description: "Tell the assistant who the email is coming from.",
+    subtitle: "Tell us who the message is coming from.",
     fields: [
       {
         name: "sender_name",
         label: "Sender Name",
         required: true,
         placeholder: "Example: Keshav Sharma",
-        helperText: "This will be used in the email introduction and signature.",
+        helperText: "Used in the opening context and final signature.",
       },
       {
         name: "sender_company",
         label: "Sender Company",
         required: false,
         placeholder: "Example: ReachForge Labs",
-        helperText: "Optional, but useful for credibility and context.",
+        helperText: "Optional, but adds credibility and professional context.",
       },
     ],
   },
   {
+    id: 2,
     title: "Recipient Details",
-    description: "Add the contact details for the person receiving the outreach.",
+    subtitle: "Add the contact information for your recipient.",
     fields: [
       {
         name: "recipient_name",
         label: "Recipient Name",
         required: true,
         placeholder: "Example: Sarah Chen",
-        helperText: "Use the recipient's real name for a more professional email.",
+        helperText: "Use the recipient's real name for a more personal tone.",
       },
       {
         name: "recipient_email",
@@ -52,56 +54,57 @@ const sections = [
         required: true,
         type: "email",
         placeholder: "Example: sarah@northstar.com",
-        helperText: "This is the address Gmail will use when sending the message.",
+        helperText: "This is where the final email will be sent through Gmail.",
       },
       {
         name: "recipient_company",
         label: "Recipient Company",
         required: false,
         placeholder: "Example: Northstar Ventures",
-        helperText: "Optional context that helps the draft feel more specific.",
+        helperText: "Useful for tailoring the email to the recipient's context.",
       },
     ],
   },
   {
+    id: 3,
     title: "Outreach Details",
-    description: "Describe the reason for the email and the value you want to communicate.",
+    subtitle: "Define the reason, value, and next step for the message.",
     fields: [
       {
         name: "topic",
         label: "Topic",
         required: true,
         placeholder: "Example: Strategic partnership for outbound growth",
-        helperText: "Keep this focused on the main purpose of the outreach.",
+        helperText: "Summarize the main purpose of the outreach clearly.",
       },
       {
         name: "value_proposition",
         label: "Value Proposition",
         required: true,
         multiline: true,
-        rows: 3,
+        rows: 4,
         placeholder:
-          "Example: We help GTM teams improve qualified response rates through personalized outbound systems and better campaign intelligence.",
-        helperText: "Explain clearly what you offer and why it matters to the recipient.",
+          "Example: We help revenue teams improve qualified response rates through stronger outbound positioning, sharper messaging, and more relevant targeting.",
+        helperText: "Explain the value in a way that is concrete and useful to the recipient.",
       },
       {
         name: "personalization",
         label: "Personalization",
         required: false,
         multiline: true,
-        rows: 2,
+        rows: 3,
         placeholder:
-          "Example: I noticed your team is expanding into enterprise accounts and recently launched a new partnerships initiative.",
-        helperText: "Optional recipient-specific context that makes the message more relevant.",
+          "Example: I noticed your team is expanding into enterprise accounts and recently launched a partnerships initiative.",
+        helperText: "Optional context that makes the draft more specific and credible.",
       },
       {
         name: "call_to_action",
         label: "Call To Action",
         required: false,
         multiline: true,
-        rows: 2,
+        rows: 3,
         placeholder: "Example: Would you be open to a 20-minute conversation next week to explore fit?",
-        helperText: "Optional, but recommended so the email ends with a clear next step.",
+        helperText: "A clear next step helps the email end with purpose.",
       },
     ],
   },
@@ -116,13 +119,15 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [currentStep, setCurrentStep] = useState(1);
 
-  const requiredFields = useMemo(
+  const currentStepConfig = steps.find((step) => step.id === currentStep) || steps[0];
+
+  const allRequiredFields = useMemo(
     () => ["sender_name", "recipient_name", "recipient_email", "topic", "value_proposition"],
     [],
   );
 
-  const isGenerateDisabled = requiredFields.some((field) => !form[field].trim()) || loadingGenerate;
   const isSendDisabled =
     !subject.trim() || !bodyText.trim() || !form.recipient_email.trim() || loadingSend || loadingGenerate;
 
@@ -137,16 +142,42 @@ function App() {
     setSuccessMessage("");
   }
 
-  function validateForm() {
+  function validateEmail(value) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+  }
+
+  function validateStep(stepId) {
+    const stepConfig = steps.find((step) => step.id === stepId);
+    if (!stepConfig) {
+      return true;
+    }
+
     const nextErrors = {};
 
-    for (const field of requiredFields) {
+    for (const field of stepConfig.fields) {
+      if (field.required && !form[field.name].trim()) {
+        nextErrors[field.name] = "This field is required.";
+      }
+
+      if (field.name === "recipient_email" && form.recipient_email.trim() && !validateEmail(form.recipient_email)) {
+        nextErrors.recipient_email = "Enter a valid email address.";
+      }
+    }
+
+    setFieldErrors((current) => ({ ...current, ...nextErrors }));
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function validateAll() {
+    const nextErrors = {};
+
+    for (const field of allRequiredFields) {
       if (!form[field].trim()) {
         nextErrors[field] = "This field is required.";
       }
     }
 
-    if (form.recipient_email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.recipient_email.trim())) {
+    if (form.recipient_email.trim() && !validateEmail(form.recipient_email)) {
       nextErrors.recipient_email = "Enter a valid email address.";
     }
 
@@ -154,10 +185,25 @@ function App() {
     return Object.keys(nextErrors).length === 0;
   }
 
+  function goToNextStep() {
+    resetMessages();
+    if (!validateStep(currentStep)) {
+      setErrorMessage("Please complete the required fields in this step before continuing.");
+      return;
+    }
+
+    setCurrentStep((value) => Math.min(value + 1, steps.length));
+  }
+
+  function goToPreviousStep() {
+    resetMessages();
+    setCurrentStep((value) => Math.max(value - 1, 1));
+  }
+
   async function generateEmail() {
     resetMessages();
 
-    if (!validateForm()) {
+    if (!validateAll()) {
       setErrorMessage("Please complete the required fields before generating the email.");
       return;
     }
@@ -224,135 +270,135 @@ function App() {
     }
   }
 
+  const stepComplete = currentStepConfig.fields
+    .filter((field) => field.required)
+    .every((field) => form[field.name].trim());
+
   return (
-    <main className="min-h-screen px-4 py-5 font-body text-ink sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(129,140,248,0.22),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(96,165,250,0.18),_transparent_22%),linear-gradient(180deg,#eef2ff_0%,#f8fafc_45%,#eef2ff_100%)] px-4 py-8 font-body text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-5 rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-soft backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="mb-3 inline-flex rounded-full bg-ink px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
-                Outreach Assistant
-              </p>
-              <h1 className="font-display text-3xl leading-tight text-ink md:text-4xl">
-                Create polished outreach emails with a workflow designed for thoughtful professional communication.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/70">
-                Add the sender context, recipient details, and your value proposition. The assistant will generate a
-                professional draft you can edit before sending through Gmail.
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-ink/10 bg-slate-900 px-4 py-3 text-sm text-white/80">
-              Generate on the left, review instantly on the right
-            </div>
-          </div>
-        </header>
+        <div className="mb-8 text-center">
+          <h1 className="font-display text-4xl tracking-tight text-slate-900 md:text-5xl">
+            Create Outreach Email
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-600 md:text-base">
+            Build a polished outreach message in a guided flow, then review and send it through your connected Gmail account.
+          </p>
+        </div>
 
-        <div className="grid items-start gap-5 lg:grid-cols-[1.2fr_0.92fr]">
-          <section className="rounded-[28px] border border-white/70 bg-white/82 p-5 shadow-soft backdrop-blur md:p-6">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="font-display text-2xl text-ink">Outreach Brief</h2>
-                <p className="mt-1 text-sm leading-6 text-ink/65">
-                  Complete the core details once, then generate and edit the final email without leaving the page.
-                </p>
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <section className="rounded-[36px] border border-white/70 bg-white/85 p-6 shadow-[0_24px_80px_rgba(79,70,229,0.12)] backdrop-blur xl:p-8">
+            <StepIndicator currentStep={currentStep} steps={steps} />
+
+            <div className="mt-8 rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm md:p-7">
+              <FormStepHeader step={currentStepConfig} />
+
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                {currentStepConfig.fields.map((field) => (
+                  <FormField
+                    key={field.name}
+                    field={field}
+                    value={form[field.name]}
+                    error={fieldErrors[field.name]}
+                    onChange={updateField}
+                  />
+                ))}
               </div>
-              <div className="flex flex-wrap gap-3">
-                {errorMessage ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-                    {errorMessage}
-                  </div>
-                ) : null}
-                {successMessage ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
-                    {successMessage}
-                  </div>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="grid gap-4 xl:grid-cols-3">
-              {sections.map((section) => (
-                <div
-                  key={section.title}
-                  className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4"
-                >
-                  <div className="mb-4">
-                    <h3 className="font-display text-xl text-ink">{section.title}</h3>
-                    <p className="mt-1 text-xs leading-5 text-ink/60">{section.description}</p>
-                  </div>
-
-                  <div className="grid gap-4">
-                    {section.fields.map((field) => (
-                      <Field
-                        key={field.name}
-                        field={field}
-                        value={form[field.name]}
-                        error={fieldErrors[field.name]}
-                        onChange={updateField}
-                      />
-                    ))}
-                  </div>
+              {(errorMessage || successMessage) && (
+                <div className="mt-6 space-y-3">
+                  {errorMessage ? (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {errorMessage}
+                    </div>
+                  ) : null}
+                  {successMessage ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      {successMessage}
+                    </div>
+                  ) : null}
                 </div>
-              ))}
-            </div>
+              )}
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={generateEmail}
-                disabled={isGenerateDisabled}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {loadingGenerate ? <Spinner label="Generating Email" /> : "Generate Email"}
-              </button>
-              <p className="self-center text-sm text-ink/60">
-                Required fields must be completed before generating.
-              </p>
+              <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={goToPreviousStep}
+                  disabled={currentStep === 1 || loadingGenerate || loadingSend}
+                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Back
+                </button>
+
+                <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                  <span className="text-sm text-slate-500">
+                    {stepComplete ? "Step complete" : "Complete required fields to continue"}
+                  </span>
+
+                  {currentStep < steps.length ? (
+                    <button
+                      type="button"
+                      onClick={goToNextStep}
+                      disabled={!stepComplete || loadingGenerate || loadingSend}
+                      className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(79,70,229,0.25)] transition hover:from-indigo-500 hover:to-sky-400 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
+                    >
+                      Next Step
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={generateEmail}
+                        disabled={loadingGenerate || loadingSend}
+                        className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(79,70,229,0.25)] transition hover:from-indigo-500 hover:to-sky-400 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
+                      >
+                        {loadingGenerate ? <Spinner label="Generating" /> : "Generate Email"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={sendEmail}
+                        disabled={isSendDisabled}
+                        className="inline-flex items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 px-6 py-3 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {loadingSend ? <Spinner label="Sending" dark /> : "Send Email"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
 
-          <aside className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-soft md:p-6 lg:sticky lg:top-5">
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/45">Email Preview</p>
-              <h2 className="mt-2 font-display text-2xl leading-tight">Review the generated draft before sending.</h2>
-            </div>
+          <aside className="rounded-[36px] border border-white/70 bg-white/88 p-6 shadow-[0_24px_80px_rgba(79,70,229,0.12)] backdrop-blur xl:p-8">
+            <div className="rounded-[28px] bg-slate-950 p-6 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200/70">
+                Email Preview
+              </p>
+              <h2 className="mt-2 font-display text-3xl leading-tight">
+                Review and refine the final draft.
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-white/65">
+                Your generated subject and body will appear here. You can edit both before sending.
+              </p>
 
-            <div className="space-y-5">
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                <label className="mb-2 block text-sm font-medium text-white/75">Subject</label>
-                <input
-                  type="text"
+              <div className="mt-6 space-y-5">
+                <PreviewField
+                  label="Subject"
                   value={subject}
-                  onChange={(event) => setSubject(event.target.value)}
                   placeholder="The generated subject line will appear here"
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+                  onChange={setSubject}
                 />
-              </div>
-
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                <label className="mb-2 block text-sm font-medium text-white/75">Body</label>
-                <textarea
+                <PreviewTextArea
+                  label="Body"
                   value={bodyText}
-                  onChange={(event) => setBodyText(event.target.value)}
                   placeholder="The generated email body will appear here"
-                  rows={12}
-                  className="w-full rounded-[22px] border border-slate-300 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500"
+                  onChange={setBodyText}
                 />
               </div>
 
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm leading-6 text-white/68">
-                The first send may open Gmail OAuth in your browser. After authorization, the backend reuses
-                `token.json` for future sends.
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm leading-6 text-white/68">
+                Gmail OAuth may open in your browser the first time you send. After that, the app will reuse your saved token.
               </div>
-
-              <button
-                type="button"
-                onClick={sendEmail}
-                disabled={isSendDisabled}
-                className="inline-flex w-full items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-900/60"
-              >
-                {loadingSend ? <Spinner label="Sending Email" /> : "Send Email"}
-              </button>
             </div>
           </aside>
         </div>
@@ -361,16 +407,77 @@ function App() {
   );
 }
 
-function Field({ field, value, onChange, error }) {
+function StepIndicator({ currentStep, steps }) {
+  return (
+    <div className="rounded-[28px] bg-slate-100/80 p-3">
+      <div className="grid gap-3 md:grid-cols-3">
+        {steps.map((step) => {
+          const isCurrent = step.id === currentStep;
+          const isComplete = step.id < currentStep;
+
+          return (
+            <div
+              key={step.id}
+              className={`rounded-[22px] px-4 py-4 transition-all duration-300 ${
+                isCurrent
+                  ? "bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-[0_14px_30px_rgba(79,70,229,0.22)]"
+                  : isComplete
+                    ? "bg-white text-slate-900"
+                    : "bg-transparent text-slate-400"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
+                    isCurrent
+                      ? "bg-white/20 text-white"
+                      : isComplete
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-white text-slate-400"
+                  }`}
+                >
+                  {step.id}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
+                    Step {step.id}
+                  </p>
+                  <p className="text-sm font-semibold">{step.title}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FormStepHeader({ step }) {
+  return (
+    <div className="text-center md:text-left">
+      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-indigo-500">Step {step.id}</p>
+      <h2 className="mt-2 font-display text-3xl text-slate-900">{step.title}</h2>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{step.subtitle}</p>
+    </div>
+  );
+}
+
+function FormField({ field, value, error, onChange }) {
   const wrapperClass = field.multiline ? "md:col-span-2" : "";
+  const baseClass = `w-full rounded-3xl border px-4 py-3.5 text-sm text-slate-900 outline-none transition ${
+    error
+      ? "border-red-300 bg-red-50/80 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+      : "border-slate-200 bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+  }`;
 
   return (
     <div className={wrapperClass}>
       <label className="block">
-        <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
+        <span className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800">
           {field.label}
           {field.required ? (
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-600">
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700">
               Required
             </span>
           ) : null}
@@ -383,11 +490,7 @@ function Field({ field, value, onChange, error }) {
             onChange={onChange}
             rows={field.rows || 4}
             placeholder={field.placeholder}
-            className={`w-full rounded-[22px] border px-4 py-3 text-sm leading-6 text-ink outline-none transition ${
-              error
-                ? "border-red-300 bg-red-50/60 focus:border-red-400"
-                : "border-slate-200 bg-slate-50/80 focus:border-slate-400"
-            }`}
+            className={`${baseClass} leading-6`}
           />
         ) : (
           <input
@@ -396,26 +499,56 @@ function Field({ field, value, onChange, error }) {
             value={value}
             onChange={onChange}
             placeholder={field.placeholder}
-            className={`w-full rounded-[22px] border px-4 py-3 text-sm text-ink outline-none transition ${
-              error
-                ? "border-red-300 bg-red-50/60 focus:border-red-400"
-                : "border-slate-200 bg-slate-50/80 focus:border-slate-400"
-            }`}
+            className={baseClass}
           />
         )}
       </label>
 
-      <p className={`mt-2 text-xs leading-5 ${error ? "text-red-600" : "text-ink/55"}`}>
+      <p className={`mt-2 text-xs leading-5 ${error ? "text-red-600" : "text-slate-500"}`}>
         {error || field.helperText}
       </p>
     </div>
   );
 }
 
-function Spinner({ label }) {
+function PreviewField({ label, value, placeholder, onChange }) {
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+      <label className="mb-2 block text-sm font-medium text-white/75">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3.5 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+      />
+    </div>
+  );
+}
+
+function PreviewTextArea({ label, value, placeholder, onChange }) {
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+      <label className="mb-2 block text-sm font-medium text-white/75">{label}</label>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={14}
+        className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+      />
+    </div>
+  );
+}
+
+function Spinner({ label, dark = false }) {
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      <span
+        className={`h-4 w-4 animate-spin rounded-full border-2 ${
+          dark ? "border-slate-400/40 border-t-slate-700" : "border-white/35 border-t-white"
+        }`}
+      />
       {label}...
     </span>
   );

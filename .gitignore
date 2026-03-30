@@ -1,7 +1,24 @@
+# Python
+venv/
 __pycache__/
 *.pyc
-venv/
+
+# Environment
+.env
+
+# Google credentials
+credentials.json
 token.json
 
-frontend/node_modules/
-frontend/dist/
+# Node
+node_modules/
+
+# Build
+dist/
+
+.env
+credentials.json
+token.json
+venv/
+__pycache__/
+node_modules/
