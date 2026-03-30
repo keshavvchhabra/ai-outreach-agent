@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+venv/
+token.json
+
+frontend/node_modules/
+frontend/dist/
